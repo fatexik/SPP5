@@ -6,6 +6,7 @@
     <e p="C:\Users\vital\RiderProjects\DependencyContainer" t="IncludeFlat">
       <e p="DependencyContainer" t="IncludeRecursive">
         <e p="bin" t="ExcludeRecursive" />
+        <e p="ClassGenerator.cs" t="Include" />
         <e p="Dependency.cs" t="Include" />
         <e p="DependencyConfig.cs" t="Include" />
         <e p="DependencyContainer.csproj" t="IncludeRecursive" />

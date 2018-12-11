@@ -5,7 +5,7 @@ namespace DependencyContainer
 {
     public class DependencyConfig
     {
-        private List<Dependency> _dependencies { get; }
+        public List<Dependency> _dependencies { get; }
 
         DependencyConfig()
         {
