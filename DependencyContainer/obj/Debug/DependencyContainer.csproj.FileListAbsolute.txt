@@ -1,0 +1,6 @@
+C:\Users\vital\RiderProjects\DependencyContainer\DependencyContainer\bin\Debug\DependencyContainer.dll
+C:\Users\vital\RiderProjects\DependencyContainer\DependencyContainer\bin\Debug\DependencyContainer.pdb
+C:\Users\vital\RiderProjects\DependencyContainer\DependencyContainer\obj\Debug\DependencyContainer.csprojResolveAssemblyReference.cache
+C:\Users\vital\RiderProjects\DependencyContainer\DependencyContainer\obj\Debug\DependencyContainer.csproj.CoreCompileInputs.cache
+C:\Users\vital\RiderProjects\DependencyContainer\DependencyContainer\obj\Debug\DependencyContainer.dll
+C:\Users\vital\RiderProjects\DependencyContainer\DependencyContainer\obj\Debug\DependencyContainer.pdb
