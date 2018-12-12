@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 
 namespace DependencyContainer
@@ -7,15 +8,36 @@ namespace DependencyContainer
     public class ClassGenerator
     {
         private List<Dependency> _dependencies;
-        ClassGenerator(List<Dependency> dependencies)
+        private object locker;
+        private Dictionary<KeyValuePair<Type, Type>, object> singletonResults;
+        public ClassGenerator(List<Dependency> dependencies)
         {
             _dependencies = dependencies;
+            locker = new object();
         }
         
         public object generate(Type typeForGenerate, Dependency dependency){
-            if (dependency.isSingleton)
+            if (!dependency.isSingleton)
             {
                 return Create(typeForGenerate);
+            }
+            if (dependency.isSingleton)
+            {
+                object result;
+
+                lock (locker)
+                {
+                    if (singletonResults.Keys.ToList().Exists(x => x.Key == dependency._valuePair.Key && x.Value == dependency._valuePair.Value))
+                    {
+                        singletonResults.TryGetValue(dependency._valuePair, out result);
+                    }
+                    else
+                    {
+                        result = Create(typeForGenerate);
+                        singletonResults.Add(dependency._valuePair, result);
+                    }
+                }
+                return result;
             }
 
             return null;
