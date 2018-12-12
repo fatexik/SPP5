@@ -5,13 +5,13 @@ namespace DependencyContainer
 {
     public class Dependency
     {
-        public bool isSingleton { get; set; }
-        public KeyValuePair<Type, Type> _valuePair;
+        internal KeyValuePair<Type, Type> KeyValueTypePair;
+        internal bool isSingleton;
 
-        public Dependency(KeyValuePair<Type,Type> valuePair, bool isSingleton)
+        internal Dependency(KeyValuePair<Type, Type> keyValueTypePair, bool isSingleton)
         {
+            KeyValueTypePair = keyValueTypePair;
             this.isSingleton = isSingleton;
-            _valuePair = valuePair;
         }
     }
 }
