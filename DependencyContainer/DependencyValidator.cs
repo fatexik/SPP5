@@ -7,10 +7,31 @@ namespace DependencyContainer
 
     class DependencyValidator
     {
-        private IEnumerable<Dependency> dependencies;
+        private List<Dependency> dependencies;
 
         internal DependencyValidator()
         {
+        }
+
+        private bool createPossibility(Dependency dependency)
+        {
+            if (dependency.declaration.IsGenericTypeDefinition && !dependency.value.IsGenericTypeDefinition)
+            {
+                return false;
+            }
+
+            if (!dependency.declaration.IsGenericTypeDefinition && dependency.declaration != dependency.value &&
+                !dependency.declaration.IsAssignableFrom(dependency.value))
+            {
+                return false;
+            }
+
+            if (dependency.value.IsAbstract)
+            {
+                return false;
+            }
+
+            return true;
         }
 
         internal bool Validate(DependenciesConfiguration config)
@@ -18,36 +39,28 @@ namespace DependencyContainer
             dependencies = config.Dependencies;
             foreach (Dependency dependency in dependencies)
             {
-                if (dependency.KeyValueTypePair.Key.IsGenericTypeDefinition)
+                if (!createPossibility(dependency))
                 {
-                    if (!dependency.KeyValueTypePair.Value.IsGenericTypeDefinition)
-                        return false;
+                    return false;
                 }
-                else if (dependency.KeyValueTypePair.Key != dependency.KeyValueTypePair.Value &&
-                         !dependency.KeyValueTypePair.Key.IsAssignableFrom(dependency.KeyValueTypePair.Value))
-                    return false;
-
-                if (dependency.KeyValueTypePair.Value.IsAbstract)
-                    return false;
             }
 
             foreach (Dependency dependency in dependencies)
             {
-                if (!dependency.KeyValueTypePair.Key.IsGenericTypeDefinition)
+                if (!dependency.declaration.IsGenericTypeDefinition)
                 {
-                    bool fl = false;
-                    Type typeForCreate = GetLastType(dependency.KeyValueTypePair.Value) ??
-                                         dependency.KeyValueTypePair.Value;
+                    bool existRightConstructor = false;
+                    Type typeForCreate = getFromDependency(dependency.value, dependencies) ??
+                                         dependency.value;
                     List<Type> bannedTypes = new List<Type>();
                     bannedTypes.Add(typeForCreate);
                     foreach (ConstructorInfo constructorInfo in typeForCreate.GetConstructors())
                     {
-                        fl = CheckConstructor(constructorInfo, bannedTypes);
-                        if (fl)
-                            break;
+                        existRightConstructor = CheckConstructor(constructorInfo, bannedTypes);
+                        if (existRightConstructor) break;
                     }
 
-                    if (!fl)
+                    if (!existRightConstructor)
                         return false;
                 }
             }
@@ -55,17 +68,15 @@ namespace DependencyContainer
             return true;
         }
 
-        private Type GetLastType(Type type, bool isFirst = true)
+        public static Type getFromDependency(Type type, List<Dependency> dependencies)
         {
             foreach (Dependency dependency in dependencies)
             {
-                if (dependency.KeyValueTypePair.Key == type)
-                    return dependency.KeyValueTypePair.Value != type
-                        ? GetLastType(dependency.KeyValueTypePair.Value, false)
-                        : dependency.KeyValueTypePair.Value;
+                if (dependency.declaration == type)
+                    return dependency.value;
             }
 
-            return isFirst ? null : type;
+            return null ;
         }
 
         private bool CheckConstructor(ConstructorInfo constructor, List<Type> bannedTypes)
@@ -74,13 +85,13 @@ namespace DependencyContainer
             {
                 bool fl = false;
                 List<Type> curr;
-                Type type = GetLastType(parameterInfo.ParameterType);
+                Type type = getFromDependency(parameterInfo.ParameterType, dependencies);
                 Type[] genericArgs = null;
 
                 if (type == null && parameterInfo.ParameterType.IsGenericType)
                 {
                     genericArgs = parameterInfo.ParameterType.GenericTypeArguments;
-                    type = GetLastType(parameterInfo.ParameterType.GetGenericTypeDefinition());
+                    type = getFromDependency(parameterInfo.ParameterType.GetGenericTypeDefinition(), dependencies);
                 }
 
                 if (type == null || bannedTypes.Contains(type))
@@ -94,7 +105,7 @@ namespace DependencyContainer
                     }
                     catch
                     {
-                        return false;
+                        throw new ArgumentException();
                     }
                 }
 

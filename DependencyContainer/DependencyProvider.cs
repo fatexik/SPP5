@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using DependencyContainer;
 
 namespace DependencyContainer
 {
@@ -10,13 +9,11 @@ namespace DependencyContainer
     {
         private DependencyValidator validator;
         private List<Dependency> dependencies;
-        private Dictionary<KeyValuePair<Type, Type>, object> singletons;
-        private object locker;
+        private Dictionary<Dependency, object> singletons;
 
         public DependencyProvider(DependenciesConfiguration config)
         {
-            locker = new object();
-            singletons = new Dictionary<KeyValuePair<Type, Type>, object>();
+            singletons = new Dictionary<Dependency, object>();
             dependencies = new List<Dependency>(config.Dependencies);
             validator = new DependencyValidator();
             if (!validator.Validate(config))
@@ -31,9 +28,11 @@ namespace DependencyContainer
 
             foreach (Dependency dependency in dependencies)
             {
-                if (dependency.KeyValueTypePair.Key == typeof(T))
+                if (dependency.declaration == typeof(T))
                 {
-                    return (T) Generate(GetIerarhyTop(dependency.KeyValueTypePair.Value) ?? dependency.KeyValueTypePair.Value, dependency);
+                    return (T) Generate(
+                        DependencyValidator.getFromDependency(dependency.value, dependencies) ?? dependency.value,
+                        dependency);
                 }
             }
 
@@ -41,22 +40,23 @@ namespace DependencyContainer
             {
                 foreach (Dependency dependency in dependencies)
                 {
-                    if (dependency.KeyValueTypePair.Key == typeof(T).GetGenericTypeDefinition())
+                    if (dependency.declaration == typeof(T).GetGenericTypeDefinition())
                     {
                         try
                         {
                             Type generic =
-                                (GetIerarhyTop(dependency.KeyValueTypePair.Value) ?? dependency.KeyValueTypePair.Value).MakeGenericType(
+                                (DependencyValidator.getFromDependency(dependency.declaration, dependencies) ??
+                                 dependency.value).MakeGenericType(
                                     typeof(T).GenericTypeArguments);
                             return (T) Generate(generic,
                                 new Dependency(
-                                    new KeyValuePair<Type, Type>(typeof(T),
-                                        dependency.KeyValueTypePair.Value.MakeGenericType(typeof(T).GenericTypeArguments)),
-                                    dependency.isSingleton));
+                                    typeof(T),
+                                    dependency.value.MakeGenericType(typeof(T).GenericTypeArguments),
+                                    dependency._flagsContainer.getSingletoneFlague()));
                         }
                         catch
                         {
-                            return null;
+                            throw new ArgumentException();
                         }
                     }
                 }
@@ -74,9 +74,11 @@ namespace DependencyContainer
             List<T> result = new List<T>();
             foreach (Dependency dependency in dependencies)
             {
-                if (dependency.KeyValueTypePair.Key == typeof(T))
+                if (dependency.declaration == typeof(T))
                 {
-                    result.Add((T) Generate(GetIerarhyTop(dependency.KeyValueTypePair.Value) ?? dependency.KeyValueTypePair.Value, dependency));
+                    result.Add((T) Generate(
+                        DependencyValidator.getFromDependency(dependency.value, dependencies) ?? dependency.value,
+                        dependency));
                 }
             }
 
@@ -84,22 +86,22 @@ namespace DependencyContainer
             {
                 foreach (Dependency dependency in dependencies)
                 {
-                    if (dependency.KeyValueTypePair.Key == typeof(T).GetGenericTypeDefinition())
+                    if (dependency.declaration == typeof(T).GetGenericTypeDefinition())
                     {
                         try
                         {
                             Type generic =
-                                (GetIerarhyTop(dependency.KeyValueTypePair.Value) ?? dependency.KeyValueTypePair.Value).MakeGenericType(
+                                (DependencyValidator.getFromDependency(dependency.value, dependencies) ?? dependency.value)
+                                .MakeGenericType(
                                     typeof(T).GenericTypeArguments);
                             result.Add((T) Generate(generic,
-                                new Dependency(
-                                    new KeyValuePair<Type, Type>(typeof(T),
-                                        dependency.KeyValueTypePair.Value.MakeGenericType(typeof(T).GenericTypeArguments)),
-                                    dependency.isSingleton)));
+                                new Dependency(typeof(T),
+                                    dependency.value.MakeGenericType(typeof(T).GenericTypeArguments),
+                                    dependency._flagsContainer.getSingletoneFlague())));
                         }
                         catch
                         {
-                            return null;
+                            throw new ArgumentException();
                         }
                     }
                 }
@@ -110,27 +112,27 @@ namespace DependencyContainer
 
         private object Generate(Type typeForGeneration, Dependency dependency)
         {
-            if (!dependency.isSingleton)
+            if (!dependency._flagsContainer.getSingletoneFlague())
             {
                 return Create(typeForGeneration);
             }
-            if (dependency.isSingleton)
+
+            if (dependency._flagsContainer.getSingletoneFlague())
             {
                 object result;
 
-                lock (locker)
+
+                if (singletons.Keys.ToList()
+                    .Exists(x => x.declaration == dependency.declaration && x.value == dependency.value))
                 {
-                    if (singletons.Keys.ToList()
-                        .Exists(x => x.Key == dependency.KeyValueTypePair.Key && x.Value == dependency.KeyValueTypePair.Value))
-                    {
-                        singletons.TryGetValue(dependency.KeyValueTypePair, out result);
-                    }
-                    else
-                    {
-                        result = Create(typeForGeneration);
-                        singletons.Add(dependency.KeyValueTypePair, result);
-                    }
+                    singletons.TryGetValue(dependency, out result);
                 }
+                else
+                {
+                    result = Create(typeForGeneration);
+                    singletons.Add(dependency, result);
+                }
+
 
                 return result;
             }
@@ -153,19 +155,6 @@ namespace DependencyContainer
             return result;
         }
 
-        private Type GetIerarhyTop(Type type, bool isFirst = true)
-        {
-            foreach (Dependency dependency in dependencies)
-            {
-                if (dependency.KeyValueTypePair.Key == type)
-                    return dependency.KeyValueTypePair.Value != type
-                        ? GetIerarhyTop(dependency.KeyValueTypePair.Value, false)
-                        : dependency.KeyValueTypePair.Value;
-            }
-
-            return isFirst ? null : type;
-        }
-
         private object CallConstructor(ConstructorInfo constructor, List<Type> bannedTypes)
         {
             ParameterInfo[] parametersInfo = constructor.GetParameters();
@@ -174,14 +163,15 @@ namespace DependencyContainer
             foreach (var parameterInfo in parametersInfo)
             {
                 object result = null;
-                List<Type> curr;
-                Type type = GetIerarhyTop(parameterInfo.ParameterType);
+                List<Type> curr = new List<Type>(bannedTypes);
+                Type type = DependencyValidator.getFromDependency(parameterInfo.ParameterType, dependencies);
                 Type[] genericArgs = null;
 
                 if (type == null && parameterInfo.ParameterType.IsGenericType)
                 {
                     genericArgs = parameterInfo.ParameterType.GenericTypeArguments;
-                    type = GetIerarhyTop(parameterInfo.ParameterType.GetGenericTypeDefinition());
+                    type = DependencyValidator.getFromDependency(parameterInfo.ParameterType.GetGenericTypeDefinition(),
+                        dependencies);
                 }
 
                 if (type == null || bannedTypes.Contains(type))
@@ -195,14 +185,12 @@ namespace DependencyContainer
                     }
                     catch
                     {
-                        return null;
+                        throw new ArgumentException();
                     }
                 }
 
                 foreach (ConstructorInfo constructorInfo in type.GetConstructors())
                 {
-                    curr = new List<Type>(bannedTypes);
-                    curr.Add(type);
                     result = CallConstructor(constructorInfo, curr);
                     if (result != null)
                         break;

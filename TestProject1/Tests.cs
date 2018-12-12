@@ -6,18 +6,17 @@ using NUnit.Framework;
 namespace TestProject1
 {
     public interface I {}
-	public class A : I {}
-	public class B1 : A
+	public class A_I : I {}
+	public class B_A_I : A_I
 	{
-		public B1 (C c)
+		public B_A_I (C c)
 		{
 
 		}
 	}
-	public class B2 : A { }
+	public class B2_A_I : A_I { }
 	public class C {}
-	public class D : C {}
-	public class G : B2 {}
+	public class D_C : C {}
 	public interface IGen1<T> { }
 	public interface IGen2<T> { }
 	public class Gen1<T> : IGen1<T>
@@ -60,38 +59,40 @@ namespace TestProject1
 		{
 			int expected = 2;
 			int actual;
-			config.Registrate<A,B1>();
-			config.Registrate<A, B2>();
-			config.Registrate<C, D>();
+			config.Registrate<A_I, B_A_I>();
+			config.Registrate<A_I, B2_A_I>();
+			config.Registrate<C, D_C>();
 			provider = new DependencyProvider(config);
-			actual = ((List<A>)provider.ResolveAll<A>()).Count;
+			actual = ((List<A_I>)provider.ResolveAll<A_I>()).Count;
 			Assert.AreEqual(expected, actual, "Wrong types count");
 		}
 
 		[Test]
-		public void CorrectTypeOfCreatedByProviderInstance()
+		public void correctGenericSingletonObjectCreation()
 		{
-			config.Registrate<I, A>();
-			config.Registrate<A, B2>();
-			config.Registrate<B2, G>();
+			IGen1<int> I1, I2;
+			config.RegistrateAsSingleton(typeof(IGen1<>), typeof(Gen1<>));
+			config.RegistrateAsSingleton(typeof(IGen2<>), typeof(Gen2<>));
 			provider = new DependencyProvider(config);
-			Assert.IsTrue(provider.Resolve<I>() is G, "Wrong type");
+			I1 = provider.Resolve<IGen1<int>>();
+			I2 = provider.Resolve<IGen1<int>>();
+			Assert.AreSame(I1, I2, "Provider creates different objects");
+		}
+		
+		[Test]
+		public void genericDefinitionAndCreate()
+		{
+			config.Registrate<I, A_I>();
+			provider = new DependencyProvider(config);
+			Assert.IsTrue(provider.Resolve<I>() is A_I, "Wrong type");
 		}
 
 		[Test]
-		public void CorrectTypeOfCreatedByProviderInstanceWithAsSelfMode()
+		public void createdByProviderInstanceWithAsSelfMode()
 		{
-			config.Registrate<A, A>();
+			config.Registrate<A_I, A_I>();
 			provider = new DependencyProvider(config);
-			Assert.IsNotNull(provider.Resolve<A>(), "Wrong type");
-		}
-
-		[Test]
-		public void ProviderCantCreateWrongGeneric()
-		{
-			config.Registrate(typeof(IGen2<>), typeof(Gen3<>));
-			provider = new DependencyProvider(config);
-			Assert.IsNull(provider.Resolve<IGen2<string>>(), "Wrong generic created");
+			Assert.IsNotNull(provider.Resolve<A_I>() is A_I, "Wrong type");
 		}
 
 		[Test]
@@ -122,28 +123,15 @@ namespace TestProject1
 		}
 
 		[Test]
-		public void ProviderCreatesSinltoneObjects()
+		public void ProviderCreatesSingltoneObjects()
 		{
 			I I1, I2;
-			config.RegistrateAsSingleton<I, A>();
-			config.Registrate<A, B2>();
-			config.Registrate<B2, G>();
+			config.RegistrateAsSingleton<I, A_I>();
 			provider = new DependencyProvider(config);
 			I1 = provider.Resolve<I>();
 			I2 = provider.Resolve<I>();
 			Assert.AreSame(I1, I2, "Provider creates different objects");
 		}
 
-		[Test]
-		public void CorrectGenericSingletonObjectCreation()
-		{
-			IGen1<int> I1, I2;
-			config.RegistrateAsSingleton(typeof(IGen1<>), typeof(Gen1<>));
-			config.RegistrateAsSingleton(typeof(IGen2<>), typeof(Gen2<>));
-			provider = new DependencyProvider(config);
-			I1 = provider.Resolve<IGen1<int>>();
-			I2 = provider.Resolve<IGen1<int>>();
-			Assert.AreSame(I1, I2, "Provider creates different objects");
-		}
 	}
 }
